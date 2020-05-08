@@ -1,0 +1,243 @@
+---
+title: " Predictive model to decide the length of airstrips"
+author:
+- ' Plash Monga'
+date: ' 12/20/2019'
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+# {.tabset .tabset-fade}
+
+
+### Flight Landing Distance Analysis
+
+
+## Introduction
+
+<top>
+<img src="C:/Users/plash/Desktop/Landing.png" height="270px" width="340px" style="float:right;margin:0 10px 10px 0">
+</top>
+
+
+__Problem Statement:__ <br>
+The objective of this project is to study the factors that impact the landing distance of commercial flights and build a Linear Regression model to predict the risk of overrun 
+
+__Approach:__ <br>
+
+For the analysis, we have Landing data(landing distance and other parameters) of 800 commercial flights coming from data file “FAA1.xls”. Our aim is to find a suitable linear model to predict the safe flight landing distance by choosing apt predictors from the variables in the dataset. In our study, we will
+analyze the relation of the predictors with the response variable, how they effects the response variable and thus selecting the relevant predictors for building our model.
+
+## Data Exploration
+
+__Importing and exploring the data:__ <br>
+
+We used the following packages to arrive at our recommendations:
+
+  * tidyverse : Used in data processing and data transformation as well as for data visualization
+  * readxl : Used for importing data files
+  * ggplot2 : Used for plots
+
+  
+There are 800 observations and 8 variables in our data file. As we can see, that in the starting records only we have some missing values. We will check our dataset to get an idea about the missing values.
+  
+  
+```{r, results='hide', message=FALSE, warning=FALSE}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(psych)
+library(funModeling)
+
+
+#Importing Dataset(Excel)
+FAA1 <- read_excel("C:/Users/plash/Desktop/FAA1.xls") 
+
+#Checking Structure
+str(FAA1)
+
+names(FAA1)
+
+dim(FAA1)
+
+```
+
+__Describing and Checking the dataset:__ <br>
+
+It can be inferred easily that the column speed_air has around 600 missing values which accounts for 75% of the data. We will further check for invalid values not corresponding to the validations imposed on the dataset.
+
+
+Further analysis shows that speed_air has only 200 values. Also, an alarming thing to notice here is that height has minimum value in negative which is inadmissible. This ensures that our dataset has abnormalities.
+
+```{r,  message=FALSE, warning=FALSE}
+summary(FAA1)
+colSums(is.na(FAA1))
+```
+
+
+__Finding the abnormalities:__ <br>
+
+Adding a quality column respective to all the variables to get the abnormal records
+
+Applied data/range validation on the variable columns – duration, speed_ground, speed_air, height and distance. Legend used:-
+• Null – Missing Values
+• V – Valid Values
+• IV – Invalid Values
+
+```{r , results='hide', message=FALSE, warning=FALSE}
+#Checking invalid and outlier observations 
+##1. Duration Validation 
+FAA1 <- FAA1 %>% mutate(Dur_quality = case_when(is.na(duration) ~ "Null", + duration<40 ~ "IV",TRUE ~ "V"))  
+
+##2. Ground Speed Validation 
+FAA1 <- FAA1 %>% mutate(SpGr_quality = case_when(is.na(speed_ground) ~ "Null", + speed_ground<30 | speed_ground>140 ~ "IV",TRUE ~ "V")) 
+
+##3. Air Speed Validation 
+FAA1 <- FAA1 %>% mutate(SpAir_quality = case_when(is.na(speed_air) ~ "Null", + speed_ground<30 | speed_ground>140 ~ "IV",TRUE ~ "V")) 
+
+##4. Height Validation 
+FAA1 <- FAA1 %>% mutate(Height_quality = case_when(is.na(height) ~ "Null", + height<6 ~ "IV",TRUE ~ "V"))
+
+##5. Distance Validation 
+FAA1 <- FAA1 %>% mutate(Dis_quality = case_when(is.na(distance) ~ "Null", + distance>6000 ~ "IV",TRUE ~ "V"))
+```
+
+
+Inference –
+
+There are 21 abnormal values found in the given data, height having the most invalid records. We will delete the abnormalities before proceeding further.
+600 missing values in Speed_air column is an unavoidable case and hence we can’t go and remove all these 600 records. We would distort the quality of our data. We would replace the missing values with 0 so that we can get the summary statistics of the variable.
+
+
+```{r, results='hide', message=FALSE, warning=FALSE}
+# Count of abnormal records
+
+table(FAA1$SpAir_quality)
+table(FAA1$Dis_quality)
+table(FAA1$Dur_quality)
+table(FAA1$Height_quality)
+table(FAA1$SpGr_quality)
+table(FAA1$SpAir_quality)
+      
+```
+
+
+
+
+__Data Cleaning :__ <br>
+We are left with 781 observations after deleting the abnormalities. Now there are 13 variables since we added 5 data validation(quality) columns. We will remove these extra columns as well since now we have only valid and null records in our updated dataset. <br>
+_FAA_ is our final dataset which we will use for further descriptive study and modeling.
+
+```{r , results='hide', message=FALSE, warning=FALSE}
+library(tidyr)
+FAA1<-FAA1 %>% mutate(speed_air = replace_na(speed_air, 0))
+
+#Deleting the abnormalities
+FAA<- FAA1[!(FAA1$Dur_quality=="IV" | FAA1$SpGr_quality=="IV" | FAA1$SpAir_quality=="IV"
+           | FAA1$Height_quality=="IV" | FAA1$Dis_quality=="IV"),]
+dim(FAA)
+
+```
+
+
+_Summary statistics of the final dataset and plotting the distributions :_ <br>
+
+As we can see, after deleting the invalid records, there is not much significant difference in the statistical summaries of dataset before and after removing the abnormalities. Hence, we are not compromising with the quality of the dataset.
+
+```{r,message=FALSE, warning=FALSE}
+FAA <- select(FAA, -c(9:13)) 
+dim(FAA)
+summary(FAA)
+plot_num(FAA)
+
+```
+
+## Descriptive Analysis
+
+We have explained the descriptive characteristics of the dataset and its variables. From EDA , we observed that the variables have normal distribution. To proceed further, we analyzed the inter-relation(correlation) between variables and landing distance. Landing distance(distance) is our response variable and it is plotted on y-axis always.
+
+_Statistical analysis of the plots between different variables :_
+
+A positive linear relationship can be observed here between variables speed_ground and speed_air. It implies that Speed_ground can be an important factor of landing distance. We have to explore the relationship with this variable more using correlation to determine whether to consider this as one of the predictors while building our model. Since there are 600 missing values in speed_air , this variable will not be adequate as a predictor for our model.
+
+```{r , message=FALSE, warning=FALSE }
+#Statistical analysis of the XY plots between different variables with distance
+par(mfrow = c(2, 3))
+plot(FAA$distance ~ FAA$no_pasg)
+plot(FAA$distance ~ FAA$speed_ground)
+plot(FAA$distance ~FAA$speed_air)
+plot(FAA$distance ~ FAA$height)
+plot(FAA$distance~ FAA$pitch)
+plot(FAA$distance ~ FAA$duration)
+```
+
+
+_Correlation :_
+
+• Speed_ground and speed_air shows strong positive correlation with distance.
+• Other variables have very less (insignificant) correlation so it won’t be of no use to include all of these variables in our model, as their contribution will be trivial.
+• As mentioned earlier, speed_air variable has only 25%(203) values in the dataset.
+• Hence, we will use speed_ground as our base for regression analysis, using speed_air won’t be a wise decision.
+
+```{r , message=FALSE, warning=FALSE }
+#Computing correlation 
+NFAA <- FAA[, sapply(FAA, is.numeric)] 
+#Type casting 
+cor(NFAA)
+```
+
+## Statistical Modeling and Conclusion
+
+From the previous analysis ,  we found that Speed_ground is a pertinent predictor to predict our response variable, landing distance.
+
+_CASE 1 - One with only speed_ground as predictor_
+
+Response Variable, Flight landing distance, can be predicted using the following regression equation -
+d𝑖𝑠𝑡𝑎𝑛𝑐𝑒 (𝑦)=41.54∗𝑠𝑝𝑒𝑒𝑑_𝑔𝑟𝑜𝑢𝑛𝑑 – 1766.76
+
+
+```{r , message=FALSE, warning=FALSE }
+fit<- lm(FAA$distance ~ FAA$speed_ground) 
+fit
+summary(fit)
+```
+
+_Case 2 – One with speed_ground, height as predictor_
+
+Response Variable, Flight landing distance, can be predicted using the following regression equation -
+d𝑖𝑠𝑡𝑎𝑛𝑐𝑒 (𝑦)=41.90∗𝑠𝑝𝑒𝑒𝑑_𝑔𝑟𝑜𝑢𝑛𝑑 + 13.83*height – 2217.743
+
+
+```{r , message=FALSE, warning=FALSE }
+#2. speed_ground, height and aircraft 
+fit1 <- lm(FAA$distance ~ FAA$speed_ground + FAA$height) 
+fit1
+summary(fit1)
+```
+
+_Conclusion_
+
+We can see that R2adj value has got increased with the addition of height as a predictor. We know that this parameter only get increase with the addition of a relevant predictor in the model.
+
+Also, the Q-Q plot for the case 2 model shows that residuals are normally distributed, confirming the fitness of the latter model. Thus, Case 2 with speed_ground and height variables to predict the response variable, flight landing distance is a good fit for our model.
+The better linear model equation to predict the flight landing distance(y) –
+
+d𝑖𝑠𝑡𝑎𝑛𝑐𝑒 (𝑦)=41.90∗𝑠𝑝𝑒𝑒𝑑_𝑔𝑟𝑜𝑢𝑛𝑑 + 13.83*height – 2217.743
+
+```{r , message=FALSE, warning=FALSE }
+residuals <- fit1$res
+par(mfrow=c(1,2))
+plot(FAA$speed_ground,residuals)
+abline(h=c(-2,0,2),lty=2)
+qqnorm(residuals)
+abline(0,1)
+
+```
